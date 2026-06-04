@@ -1,0 +1,17 @@
+export {
+  assertProviderReady,
+  BUILTIN_PASSWORD_PROVIDER,
+  getAllProviderSettings,
+  getEnabledProviders,
+  getPublicAuthOptions,
+  getProviderSetting,
+  getReadyProviderIds,
+  isKnownProvider,
+  isProviderReady,
+  seedDefaultProviderSettings,
+  setEnabledProviders,
+  upsertProviderSetting,
+  type ProviderOptionPublic,
+  type ProviderSettingPublic,
+  type UpsertProviderInput,
+} from './providerSettings';

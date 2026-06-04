@@ -1,0 +1,23 @@
+{
+  "id": "uaepass",
+  "label": "UAE PASS",
+  "version": "1.0.0",
+  "type": "oauth",
+  "oauth": {
+    "authorizeUrl": "https://stg-id.uaepass.ae/idshub/authorize",
+    "tokenUrl": "https://stg-id.uaepass.ae/idshub/token",
+    "userInfoUrl": "https://stg-id.uaepass.ae/idshub/userinfo",
+    "scopes": ["urn:uae:digitalid:profile:general"],
+    "responseType": "code",
+    "tokenClientAuth": "basic",
+    "extraAuthorizeParams": {
+      "acr_values": "urn:safelayer:tws:policies:authentication:level:low",
+      "ui_locales": "en"
+    },
+    "profileMapping": {
+      "id": "sub",
+      "email": "email",
+      "name": "fullnameEN"
+    }
+  }
+}

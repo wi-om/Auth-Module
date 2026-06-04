@@ -1,0 +1,21 @@
+{
+  "id": "passkey",
+  "label": "Passkey",
+  "version": "1.0.0",
+  "type": "passkey",
+  "passkey": {
+    "rpName": "Auth App",
+    "userVerification": "preferred",
+    "authenticatorAttachment": "cross-platform",
+    "attestationType": "none",
+    "requireResidentKey": false,
+    "allowConditionalMediation": true
+  },
+  "configFields": [
+    {
+      "key": "rpId",
+      "label": "Relying Party ID (hostname)",
+      "placeholder": "localhost — must match your app hostname (no port)"
+    }
+  ]
+}

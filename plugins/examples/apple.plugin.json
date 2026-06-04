@@ -1,0 +1,21 @@
+{
+  "id": "apple",
+  "label": "Sign in with Apple",
+  "version": "1.0.0",
+  "type": "oauth",
+  "oauth": {
+    "authorizeUrl": "https://appleid.apple.com/auth/authorize",
+    "tokenUrl": "https://appleid.apple.com/auth/token",
+    "scopes": ["name", "email"],
+    "responseType": "code",
+    "tokenClientAuth": "body",
+    "extraAuthorizeParams": {
+      "response_mode": "form_post"
+    },
+    "profileMapping": {
+      "id": "sub",
+      "email": "email",
+      "name": "name"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": "google",
+  "label": "Google",
+  "version": "1.0.0",
+  "type": "oauth",
+  "oauth": {
+    "authorizeUrl": "https://accounts.google.com/o/oauth2/v2/auth",
+    "tokenUrl": "https://oauth2.googleapis.com/token",
+    "userInfoUrl": "https://openidconnect.googleapis.com/v1/userinfo",
+    "scopes": ["openid", "email", "profile"],
+    "responseType": "code",
+    "profileMapping": {
+      "id": "sub",
+      "email": "email",
+      "name": "name"
+    }
+  }
+}

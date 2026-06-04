@@ -1,0 +1,21 @@
+/**
+ * Facebook OAuth plugin — upload this .js file on Provider Setup.
+ */
+export default {
+  id: 'facebook',
+  label: 'Facebook',
+  version: '1.0.0',
+  type: 'oauth',
+  oauth: {
+    authorizeUrl: 'https://www.facebook.com/v19.0/dialog/oauth',
+    tokenUrl: 'https://graph.facebook.com/v19.0/oauth/access_token',
+    userInfoUrl: 'https://graph.facebook.com/me?fields=id,name,email',
+    scopes: ['email', 'public_profile'],
+    responseType: 'code',
+    profileMapping: {
+      id: 'id',
+      email: 'email',
+      name: 'name',
+    },
+  },
+};

@@ -1,0 +1,31 @@
+{
+  "name": "auth-microservice-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Prototype reusable auth microservice with per-project DB",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node src/index.ts",
+    "dev:setup-ui": "npm run dev --prefix setup-ui",
+    "build": "npm run build:setup-ui && tsc",
+    "build:setup-ui": "npm run build --prefix setup-ui",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@simplewebauthn/server": "^13.2.2",
+    "adm-zip": "^0.5.17",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "multer": "^2.1.1",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^25.9.1",
+    "@types/pg": "^8.20.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
+  }
+}

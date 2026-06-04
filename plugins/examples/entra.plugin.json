@@ -1,0 +1,26 @@
+{
+  "id": "entra",
+  "label": "Microsoft Entra ID",
+  "version": "1.0.0",
+  "type": "oauth",
+  "oauth": {
+    "authorizeUrl": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+    "tokenUrl": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+    "userInfoUrl": "https://graph.microsoft.com/oidc/userinfo",
+    "scopes": ["openid", "profile", "email", "offline_access"],
+    "responseType": "code",
+    "profileMapping": {
+      "id": "sub",
+      "email": "email",
+      "name": "name"
+    }
+  },
+  "configFields": [
+    {
+      "key": "tenantId",
+      "label": "Tenant ID",
+      "required": false,
+      "placeholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (leave empty for multi-tenant / common)"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+/**
+ * GitHub OAuth plugin — upload this .ts file on Provider Setup.
+ * Supports: export default { ... } | const + export default | .json
+ */
+exports.default = {
+    id: 'github',
+    label: 'GitHub',
+    version: '1.0.0',
+    type: 'oauth',
+    oauth: {
+        authorizeUrl: 'https://github.com/login/oauth/authorize',
+        tokenUrl: 'https://github.com/login/oauth/access_token',
+        userInfoUrl: 'https://api.github.com/user',
+        scopes: ['read:user', 'user:email'],
+        responseType: 'code',
+        profileMapping: {
+            id: 'id',
+            email: 'email',
+            name: 'login',
+        },
+    },
+};
