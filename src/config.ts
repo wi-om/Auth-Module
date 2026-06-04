@@ -7,10 +7,15 @@ const jwtSecret = process.env.JWT_SECRET || process.env.AUTH_TOKEN_SECRET || '';
 
 function parseAllowedOrigins(): string[] {
   const raw = process.env.ALLOWED_ORIGINS || '';
-  return raw
+  const origins = raw
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean);
+  const frontend = (process.env.FRONTEND_APP_URL || '').trim().replace(/\/$/, '');
+  if (frontend && !origins.includes(frontend)) {
+    origins.push(frontend);
+  }
+  return origins;
 }
 
 function requirePepper(name: string, value: string | undefined): string {

@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { Pool } from 'pg';
+import { parse as parseConnectionString } from 'pg-connection-string';
 import { ensureCompaniesTable } from './companyIdType';
 import { ensureAdminAuthSchema } from './adminAuthSchema';
 import { ensureAuthSetupTables } from './productDbConfig';
@@ -21,9 +22,45 @@ export type ConnectionInput = {
 const REQUIRED_AUTH_TABLES = ['auth_settings', 'auth_admins', 'auth_provider_plugins', 'auth_provider_settings'];
 const PRODUCT_EXTRA_TABLES = ['companies'];
 
+const PLACEHOLDER_HOSTS = new Set(['base', 'host', 'localhost', 'dbname']);
+
+/** Reject malformed URLs before pg falls back to dummy host "base" (ENOTFOUND base). */
+export function validateConnectionString(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) {
+    throw new Error('Database connection URL is empty');
+  }
+  if (!/^postgres(ql)?:\/\//i.test(trimmed)) {
+    throw new Error(
+      'Use a full postgresql:// URL (Connection URL tab), or fill server, user, and database fields'
+    );
+  }
+
+  let config: ReturnType<typeof parseConnectionString>;
+  try {
+    config = parseConnectionString(trimmed);
+  } catch {
+    throw new Error(
+      'Invalid PostgreSQL URL. Encode @ in the password as %40 (example: Delta%4022, not Delta@22)'
+    );
+  }
+
+  const host = String(config.host || '').trim();
+  if (!host || PLACEHOLDER_HOSTS.has(host.toLowerCase())) {
+    throw new Error(
+      'Could not read a valid database host. Paste the full Azure URL and encode @ in the password as %40'
+    );
+  }
+  if (!config.database) {
+    throw new Error('Database name missing from URL (path should end with /erp or your DB name)');
+  }
+
+  return trimmed;
+}
+
 export function buildDatabaseUrl(input: ConnectionInput): string {
   if (input.databaseUrl?.trim()) {
-    return input.databaseUrl.trim();
+    return validateConnectionString(input.databaseUrl);
   }
   const host = String(input.host || '').trim();
   const user = String(input.user || '').trim();
@@ -31,16 +68,16 @@ export function buildDatabaseUrl(input: ConnectionInput): string {
   if (!host || !user || !database) {
     throw new Error('Provide databaseUrl or host, user, and database name');
   }
+  if (PLACEHOLDER_HOSTS.has(host.toLowerCase())) {
+    throw new Error('Replace placeholder host with your server (e.g. po-dev.postgres.database.azure.com)');
+  }
   const port = input.port ? String(input.port) : '5432';
   const password = input.password !== undefined ? String(input.password) : '';
   const encodedUser = encodeURIComponent(user);
   const encodedPass = encodeURIComponent(password);
   const auth = password ? `${encodedUser}:${encodedPass}` : encodedUser;
-  const base = `postgresql://${auth}@${host}:${port}/${database}`;
-  if (input.ssl) {
-    return `${base}?sslmode=require`;
-  }
-  return base;
+  const built = `postgresql://${auth}@${host}:${port}/${database}`;
+  return validateConnectionString(input.ssl ? `${built}?sslmode=require` : built);
 }
 
 async function tableExists(pool: Pool, tableName: string): Promise<boolean> {
@@ -186,15 +223,19 @@ export async function testAndPrepareConnection(
   if (!probe.tablesExist && options?.migrate !== false) {
     await runBootstrapMigration(databaseUrl);
     migrated = true;
-    probe = await probeSchema(databaseUrl, dbMode);
-    if (!probe.tablesExist) {
-      throw new Error(`Migration completed but tables still missing: ${probe.missingTables.join(', ')}`);
-    }
   }
 
+  // companies + auth_provider_* are created here (not in 001-auth-bootstrap.sql)
   const companyId = await ensureDefaultCompany(databaseUrl);
   await ensureAdminAuthSchema(databaseUrl);
   await ensureAuthSetupTables(databaseUrl, companyId);
+
+  probe = await probeSchema(databaseUrl, dbMode);
+  if (!probe.tablesExist) {
+    throw new Error(
+      `Schema setup finished but tables still missing: ${probe.missingTables.join(', ')}`
+    );
+  }
 
   await setAuthSetting(databaseUrl, 'db_mode', dbMode);
 

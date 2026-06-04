@@ -11,7 +11,14 @@ export type SetupConnectionPreview = {
 };
 
 export function redactDatabaseUrl(databaseUrl: string): string {
-  return databaseUrl.replace(/:\/\/([^:]+):([^@]+)@/, '://$1:****@');
+  try {
+    const normalized = databaseUrl.replace(/^postgresql:/i, 'http:');
+    const u = new URL(normalized);
+    if (u.password) u.password = '****';
+    return u.toString().replace(/^http:/i, 'postgresql:');
+  } catch {
+    return 'postgresql://****@****/****';
+  }
 }
 
 export function parseDatabaseUrlForSetupForm(
@@ -19,6 +26,8 @@ export function parseDatabaseUrlForSetupForm(
   dbMode: 'product' | 'auth_only'
 ): SetupConnectionPreview {
   const ssl = /sslmode=require|ssl=true/i.test(databaseUrl);
+  const redacted = redactDatabaseUrl(databaseUrl);
+
   try {
     const normalized = databaseUrl.replace(/^postgresql:/i, 'http:');
     const u = new URL(normalized);
@@ -28,8 +37,8 @@ export function parseDatabaseUrlForSetupForm(
     const database = decodeURIComponent((u.pathname || '/postgres').replace(/^\//, '') || 'postgres');
     return {
       dbMode,
-      useUrl: false,
-      databaseUrl: redactDatabaseUrl(databaseUrl),
+      useUrl: true,
+      databaseUrl: redacted,
       host,
       port,
       user,
@@ -40,7 +49,7 @@ export function parseDatabaseUrlForSetupForm(
     return {
       dbMode,
       useUrl: true,
-      databaseUrl: redactDatabaseUrl(databaseUrl),
+      databaseUrl: redacted,
       host: 'localhost',
       port: '5432',
       user: 'postgres',

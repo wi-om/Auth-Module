@@ -24,7 +24,7 @@ const defaultForm = {
 
 export function ConnectionStep({ dbConnected, onSaved, onResumeRequired }: Props) {
   const [dbMode, setDbMode] = useState<DbMode>('product');
-  const [useUrl, setUseUrl] = useState(false);
+  const [useUrl, setUseUrl] = useState(true);
   const [form, setForm] = useState(defaultForm);
   const [loading, setLoading] = useState<'test' | 'save' | 'load' | null>(null);
 
@@ -215,15 +215,20 @@ export function ConnectionStep({ dbConnected, onSaved, onResumeRequired }: Props
             <Label htmlFor="databaseUrl">PostgreSQL connection URL</Label>
             <Input
               id="databaseUrl"
-              type="password"
+              type="text"
               autoComplete="off"
-              placeholder="postgresql://user:pass@host:5432/dbname"
+              spellCheck={false}
+              placeholder="postgresql://user:pass%40word@server.postgres.database.azure.com:5432/erp?sslmode=require"
               value={form.databaseUrl}
               onChange={set('databaseUrl')}
             />
+            <p className="mt-1 text-xs text-slate-500">
+              Same URL as Attenus <code className="text-indigo-700">backend/.env</code> <code>DATABASE_URL</code>.
+              Encode <code>@</code> in the password as <code>%40</code> (e.g. <code>Delta%4022</code>).
+            </p>
             {dbConnected ? (
-              <p className="mt-1 text-xs text-slate-500">
-                Stored URL is masked. Paste the full URL again if you need to change it.
+              <p className="mt-1 text-xs text-amber-700">
+                Saved URL is masked. Paste the full URL again to change the connection.
               </p>
             ) : null}
           </div>

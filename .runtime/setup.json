@@ -1,6 +1,6 @@
 {
-  "databaseUrl": "postgresql://poadmin:Delta@22@po-dev.postgres.database.azure.com:5432/postgres?schema=public&sslmode=require",
-  "companyId": "4321c953-412c-4b38-8692-136e9b66e4c3",
+  "databaseUrl": "postgresql://poadmin:Delta%4022@po-dev.postgres.database.azure.com:5432/erp?schema=public&sslmode=require",
+  "companyId": "00000000-0000-4000-8000-000000000001",
   "dbMode": "product",
   "bootstrapPhase": "setup"
 }
