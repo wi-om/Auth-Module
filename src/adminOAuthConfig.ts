@@ -7,7 +7,7 @@ import {
   markAdminProductSeparationReady,
 } from './adminProductSeparationCache';
 import { getAuthSetting } from './bootstrapDb';
-import { ensureCompaniesTable } from './companyIdType';
+import { ensureOrganisationsTable } from './organisationIdType';
 import { hasProductEndUserConfiguration } from './productProviderFilter';
 import { resolveSetupAdminOAuthRedirectUri } from './setupAdminRedirect';
 import { getSetupPool } from './setupDbPool';
@@ -50,13 +50,13 @@ export async function ensureAdminOAuthConfigTable(databaseUrl: string): Promise<
   if (adminOAuthConfigTableReady.has(databaseUrl)) return;
 
   const pool = getSetupPool(databaseUrl);
-  const companyIdType = await ensureCompaniesTable(pool);
+  const companyIdType = await ensureOrganisationsTable(pool);
   const cid = companyIdType;
 
   if (!(await tableExists(pool, 'auth_admin_oauth_config'))) {
     await pool.query(`
         CREATE TABLE auth_admin_oauth_config (
-          company_id ${cid} NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+          company_id ${cid} NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
           provider TEXT NOT NULL,
           client_id TEXT NOT NULL DEFAULT '',
           client_secret TEXT NOT NULL DEFAULT '',

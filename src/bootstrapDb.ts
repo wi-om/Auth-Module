@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { Pool } from 'pg';
 import { parse as parseConnectionString } from 'pg-connection-string';
-import { ensureCompaniesTable } from './companyIdType';
+import { ensureOrganisationsTable } from './organisationIdType';
 import { ensureAdminAuthSchema } from './adminAuthSchema';
 import { ensureAuthSetupTables } from './productDbConfig';
 
@@ -20,7 +20,7 @@ export type ConnectionInput = {
 };
 
 const REQUIRED_AUTH_TABLES = ['auth_settings', 'auth_admins', 'auth_provider_plugins', 'auth_provider_settings'];
-const PRODUCT_EXTRA_TABLES = ['companies'];
+const PRODUCT_EXTRA_TABLES = ['organisations'];
 
 const PLACEHOLDER_HOSTS = new Set(['base', 'host', 'localhost', 'dbname']);
 
@@ -93,18 +93,26 @@ export async function probeSchema(
   dbMode: DbMode
 ): Promise<{ tablesExist: boolean; missingTables: string[]; warnings: string[] }> {
   const pool = new Pool({ connectionString: databaseUrl });
-  const required = [...REQUIRED_AUTH_TABLES, ...(dbMode === 'product' ? PRODUCT_EXTRA_TABLES : ['companies'])];
+  const required = [...REQUIRED_AUTH_TABLES, ...(dbMode === 'product' ? PRODUCT_EXTRA_TABLES : ['organisations'])];
   const missingTables: string[] = [];
   const warnings: string[] = [];
 
   try {
     await pool.query('SELECT 1');
     for (const t of required) {
-      if (!(await tableExists(pool, t))) {
+      const exists =
+        t === 'organisations'
+          ? (await tableExists(pool, 'organisations')) || (await tableExists(pool, 'companies'))
+          : await tableExists(pool, t);
+      if (!exists) {
         missingTables.push(t);
       }
     }
-    if (dbMode === 'product' && (await tableExists(pool, 'companies')) && !(await tableExists(pool, 'users'))) {
+    if (
+      dbMode === 'product' &&
+      ((await tableExists(pool, 'organisations')) || (await tableExists(pool, 'companies'))) &&
+      !(await tableExists(pool, 'users'))
+    ) {
       warnings.push('users table not found — product app may create it later');
     }
   } finally {
@@ -124,7 +132,11 @@ export async function runBootstrapMigration(databaseUrl: string): Promise<void> 
   const pool = new Pool({ connectionString: databaseUrl });
   try {
     await runSqlFile(pool, '001-auth-bootstrap.sql');
-    for (const file of ['003-auth-admin-oauth-config.sql', '004-separate-admin-product-auth.sql']) {
+    for (const file of [
+      '003-auth-admin-oauth-config.sql',
+      '004-separate-admin-product-auth.sql',
+      '006-rename-companies-to-organisations.sql',
+    ]) {
       try {
         await runSqlFile(pool, file);
       } catch {
@@ -139,14 +151,14 @@ export async function runBootstrapMigration(databaseUrl: string): Promise<void> 
 export async function ensureDefaultCompany(databaseUrl: string): Promise<string> {
   const pool = new Pool({ connectionString: databaseUrl });
   try {
-    await ensureCompaniesTable(pool);
-    const existing = await pool.query<{ id: string }>(`SELECT id FROM companies LIMIT 1`);
+    await ensureOrganisationsTable(pool);
+    const existing = await pool.query<{ id: string }>(`SELECT id FROM organisations LIMIT 1`);
     if (existing.rows[0]?.id) {
       return String(existing.rows[0].id);
     }
     const companyId = crypto.randomUUID();
     await pool.query(
-      `INSERT INTO companies (id, name, created_at, updated_at) VALUES ($1, $2, NOW(), NOW())`,
+      `INSERT INTO organisations (id, name, created_at, updated_at) VALUES ($1, $2, NOW(), NOW())`,
       [companyId, 'Default']
     );
     return companyId;
@@ -225,7 +237,7 @@ export async function testAndPrepareConnection(
     migrated = true;
   }
 
-  // companies + auth_provider_* are created here (not in 001-auth-bootstrap.sql)
+  // organisations + auth_provider_* are created here (not in 001-auth-bootstrap.sql)
   const companyId = await ensureDefaultCompany(databaseUrl);
   await ensureAdminAuthSchema(databaseUrl);
   await ensureAuthSetupTables(databaseUrl, companyId);

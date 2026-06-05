@@ -17,5 +17,5 @@ CREATE TABLE IF NOT EXISTS auth_admins (
 
 CREATE UNIQUE INDEX IF NOT EXISTS auth_admins_email_lower_uq ON auth_admins (LOWER(email));
 
--- companies + auth_provider_* are created in code (companyIdType.ts / productDbConfig.ts)
--- so company_id FK matches existing companies.id (UUID or TEXT).
+-- organisations + auth_provider_* are created in code (organisationIdType.ts / productDbConfig.ts)
+-- so company_id FK matches existing organisations.id (UUID or TEXT).

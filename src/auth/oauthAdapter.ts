@@ -216,5 +216,6 @@ export function getFrontendOAuthCompleteUrl(): string {
 }
 
 export function getFrontendOAuthErrorUrl(message: string): string {
-  return `${getFrontendAppBaseUrl()}/signin?oauth_error=${encodeURIComponent(message)}`;
+  const loginPath = (process.env.FRONTEND_LOGIN_PATH || '/login').replace(/^\//, '');
+  return `${getFrontendAppBaseUrl()}/${loginPath}?oauth_error=${encodeURIComponent(message)}`;
 }

@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import type { ProviderPluginManifest } from './plugin/manifestSchema';
 import { ensureAdminOAuthConfigTable } from './adminOAuthConfig';
-import { ensureCompaniesTable, type CompanyIdPgType } from './companyIdType';
+import { ensureOrganisationsTable, type OrganisationIdPgType } from './organisationIdType';
 
 type ProductProviderRow = {
   provider: string;
@@ -50,7 +50,7 @@ export async function ensureAuthSetupTables(databaseUrl: string, companyId?: str
   const { getSetupPool } = await import('./setupDbPool');
   const pool = getSetupPool(databaseUrl);
   await ensureAdminOAuthConfigTable(databaseUrl);
-  const companyIdType = await ensureCompaniesTable(pool);
+  const companyIdType = await ensureOrganisationsTable(pool);
 
   if (!(await authProviderSchemaExists(pool))) {
     await createAuthProviderTables(pool, companyIdType);
@@ -63,7 +63,7 @@ export async function ensureAuthSetupTables(databaseUrl: string, companyId?: str
   authTablesEnsuredKeys.add(databaseUrl);
 }
 
-async function getTableCompanyIdPgType(pool: Pool, table: string): Promise<CompanyIdPgType | null> {
+async function getTableOrganisationIdPgType(pool: Pool, table: string): Promise<OrganisationIdPgType | null> {
   const r = await pool.query<{ udt_name: string }>(
     `SELECT udt_name FROM information_schema.columns
      WHERE table_schema = 'public' AND table_name = $1 AND column_name = 'company_id' LIMIT 1`,
@@ -75,9 +75,9 @@ async function getTableCompanyIdPgType(pool: Pool, table: string): Promise<Compa
   return udt === 'uuid' ? 'UUID' : 'TEXT';
 }
 
-async function authTablesCompanyIdTypeMismatch(pool: Pool, expected: CompanyIdPgType): Promise<boolean> {
+async function authTablesCompanyIdTypeMismatch(pool: Pool, expected: OrganisationIdPgType): Promise<boolean> {
   for (const table of ['auth_provider_plugins', 'auth_provider_settings'] as const) {
-    const actual = await getTableCompanyIdPgType(pool, table);
+    const actual = await getTableOrganisationIdPgType(pool, table);
     if (actual && actual !== expected) return true;
   }
   return false;
@@ -94,7 +94,7 @@ async function dropTableCompanyFks(pool: Pool, tableName: string): Promise<void>
      FROM pg_constraint c
      JOIN pg_class t ON t.oid = c.conrelid
      JOIN pg_class ref ON ref.oid = c.confrelid
-     WHERE t.relname = $1 AND ref.relname = 'companies' AND c.contype = 'f'`,
+     WHERE t.relname = $1 AND ref.relname = 'organisations' AND c.contype = 'f'`,
     [tableName]
   );
   for (const row of fks.rows) {
@@ -124,14 +124,14 @@ async function realignAuthProviderCompanyIds(pool: Pool, companyId?: string): Pr
         `UPDATE ${table} AS t
          SET company_id = $1
          WHERE company_id IS NULL
-            OR NOT EXISTS (SELECT 1 FROM companies c WHERE c.id = t.company_id)`,
+            OR NOT EXISTS (SELECT 1 FROM organisations c WHERE c.id = t.company_id)`,
         [companyId]
       );
     } else {
       await pool.query(
         `DELETE FROM ${table} AS t
          WHERE company_id IS NOT NULL
-           AND NOT EXISTS (SELECT 1 FROM companies c WHERE c.id = t.company_id)`
+           AND NOT EXISTS (SELECT 1 FROM organisations c WHERE c.id = t.company_id)`
       );
     }
   }
@@ -140,8 +140,8 @@ async function realignAuthProviderCompanyIds(pool: Pool, companyId?: string): Pr
 async function migrateAuthTableCompanyId(
   pool: Pool,
   tableName: string,
-  from: CompanyIdPgType,
-  to: CompanyIdPgType
+  from: OrganisationIdPgType,
+  to: OrganisationIdPgType
 ): Promise<void> {
   if (from === to) return;
 
@@ -155,15 +155,15 @@ async function migrateAuthTableCompanyId(
 /** Fix UUID/TEXT mismatch from an earlier bootstrap (with or without existing rows). */
 async function repairAuthProviderCompanyIdType(
   pool: Pool,
-  expected: CompanyIdPgType,
+  expected: OrganisationIdPgType,
   companyId?: string
 ): Promise<void> {
-  console.warn(`[auth] Aligning auth_provider_* company_id to ${expected} (companies.id).`);
+  console.warn(`[auth] Aligning auth_provider_* company_id to ${expected} (organisations.id).`);
 
   try {
     for (const table of ['auth_provider_settings', 'auth_provider_plugins'] as const) {
       if (!(await tableExists(pool, table))) continue;
-      const actual = await getTableCompanyIdPgType(pool, table);
+      const actual = await getTableOrganisationIdPgType(pool, table);
       if (!actual || actual === expected) continue;
       await migrateAuthTableCompanyId(pool, table, actual, expected);
     }
@@ -185,12 +185,12 @@ async function repairAuthProviderCompanyIdType(
   }
 }
 
-async function createAuthProviderTables(pool: Pool, companyIdType: CompanyIdPgType): Promise<void> {
+async function createAuthProviderTables(pool: Pool, companyIdType: OrganisationIdPgType): Promise<void> {
   const cid = companyIdType;
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS auth_provider_plugins (
-      company_id ${cid} NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      company_id ${cid} NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
       id TEXT NOT NULL,
       label TEXT NOT NULL,
       version TEXT NOT NULL,
@@ -206,7 +206,7 @@ async function createAuthProviderTables(pool: Pool, companyIdType: CompanyIdPgTy
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS auth_provider_settings (
-      company_id ${cid} NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      company_id ${cid} NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
       provider TEXT NOT NULL,
       enabled BOOLEAN NOT NULL DEFAULT FALSE,
       client_id TEXT NOT NULL DEFAULT '',
@@ -222,7 +222,7 @@ async function createAuthProviderTables(pool: Pool, companyIdType: CompanyIdPgTy
 async function upgradeAuthProviderTables(
   pool: Pool,
   companyId: string | undefined,
-  companyIdType: CompanyIdPgType
+  companyIdType: OrganisationIdPgType
 ): Promise<void> {
   const cid = companyIdType;
 
@@ -297,7 +297,7 @@ async function upgradeAuthProviderTables(
 async function addCompanyFkIfMissing(
   pool: Pool,
   tableName: string,
-  companyIdType: CompanyIdPgType
+  companyIdType: OrganisationIdPgType
 ): Promise<void> {
   const fkName = `${tableName}_company_id_fkey`;
   const exists = await pool.query(
@@ -310,14 +310,14 @@ async function addCompanyFkIfMissing(
     await pool.query(`
       ALTER TABLE ${tableName}
       ADD CONSTRAINT ${fkName}
-      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+      FOREIGN KEY (company_id) REFERENCES organisations(id) ON DELETE CASCADE
     `);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes('cannot be implemented') || msg.includes('incompatible types')) {
       throw new Error(
-        `${tableName}.company_id type does not match companies.id (${companyIdType}). ` +
-          'Drop legacy auth_provider_* tables or align companies.id with your product schema.'
+        `${tableName}.company_id type does not match organisations.id (${companyIdType}). ` +
+          'Drop legacy auth_provider_* tables or align organisations.id with your product schema.'
       );
     }
     throw err;

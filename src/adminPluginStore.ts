@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { Pool } from 'pg';
-import { ensureCompaniesTable, type CompanyIdPgType } from './companyIdType';
+import { ensureOrganisationsTable, type OrganisationIdPgType } from './organisationIdType';
 import { readExamplePluginManifest, exampleFilenameForPlugin } from './pluginCatalog';
 import type { ProviderPluginManifest } from './plugin/manifestSchema';
 import { registerPlugin, type PluginRecord } from './plugin/pluginRegistry';
@@ -18,13 +18,13 @@ async function tableExists(pool: Pool, tableName: string): Promise<boolean> {
 export async function ensureAdminPluginsTable(databaseUrl: string): Promise<void> {
   const pool = new Pool({ connectionString: databaseUrl });
   try {
-    const companyIdType = await ensureCompaniesTable(pool);
+    const companyIdType = await ensureOrganisationsTable(pool);
     const cid = companyIdType;
 
     if (!(await tableExists(pool, 'auth_admin_plugins'))) {
       await pool.query(`
         CREATE TABLE auth_admin_plugins (
-          company_id ${cid} NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+          company_id ${cid} NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
           id TEXT NOT NULL,
           label TEXT NOT NULL,
           version TEXT NOT NULL,
