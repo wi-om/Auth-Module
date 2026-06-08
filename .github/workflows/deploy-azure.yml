@@ -45,7 +45,10 @@ jobs:
           rm -rf "$PKG"
           mkdir -p "$PKG"
           cp -r dist package.json node_modules "$PKG/"
-          cp -r setup-ui/dist "$PKG/setup-ui/"
+          # Must land at setup-ui/dist/index.html (mountSetupUi resolves ../setup-ui/dist from dist/index.js)
+          mkdir -p "$PKG/setup-ui"
+          cp -r setup-ui/dist "$PKG/setup-ui/dist"
+          test -f "$PKG/setup-ui/dist/index.html"
           cd "$PKG"
           zip -r "${{ runner.temp }}/auth-deploy.zip" .
 
@@ -93,7 +96,8 @@ jobs:
                 PORT=8080 \
                 FRONTEND_APP_URL="${{ env.FRONTEND_URL }}" \
                 OAUTH_CALLBACK_BASE_URL="${{ env.AUTH_URL }}" \
-                ALLOWED_ORIGINS="${{ env.FRONTEND_URL }},${{ env.BACKEND_URL }}"
+                ALLOWED_ORIGINS="${{ env.FRONTEND_URL }},${{ env.BACKEND_URL }}" \
+                DEFAULT_COMPANY_ID=00000000-0000-4000-8000-000000000001
             az webapp config set \
               --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
               --name "${{ env.AUTH_APP }}" \

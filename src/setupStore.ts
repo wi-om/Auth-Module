@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { getAuthSetting, setAuthSetting } from './bootstrapDb';
+import { config } from './config';
 
 export type BootstrapPhase = 'connection' | 'register' | 'setup' | 'complete';
 
@@ -62,7 +63,54 @@ export async function syncPhaseFromDb(config: SetupConfig): Promise<SetupConfig>
   };
 }
 
+/** Hydrate setup.json from Azure env or DB when the runtime file was wiped on redeploy. */
+export async function ensureSetupFromEnv(): Promise<SetupConfig | null> {
+  const existing = await readSetupConfig();
+  if (existing) return existing;
+
+  const databaseUrl = process.env.DATABASE_URL?.trim();
+  if (!databaseUrl) return null;
+
+  const companyIdFromEnv = (
+    config.productCompanyId ||
+    process.env.DEFAULT_COMPANY_ID ||
+    '00000000-0000-4000-8000-000000000001'
+  ).trim();
+
+  try {
+    const stored = await getAuthSetting<{
+      phase?: BootstrapPhase;
+      dbMode?: DbMode;
+      companyId?: string;
+      setupCompletedAt?: string;
+    }>(databaseUrl, 'bootstrap');
+    if (stored?.companyId) {
+      const restored: SetupConfig = {
+        databaseUrl,
+        companyId: stored.companyId,
+        dbMode: stored.dbMode === 'auth_only' ? 'auth_only' : 'product',
+        bootstrapPhase: stored.phase || 'complete',
+        setupCompletedAt: stored.setupCompletedAt,
+      };
+      await writeSetupConfig(restored);
+      return restored;
+    }
+  } catch {
+    // DB unreachable — fall through to env-only bootstrap
+  }
+
+  const bootstrapped: SetupConfig = {
+    databaseUrl,
+    companyId: companyIdFromEnv,
+    dbMode: 'product',
+    bootstrapPhase: 'register',
+  };
+  await writeSetupConfig(bootstrapped);
+  return bootstrapped;
+}
+
 export async function loadSetupConfigHydrated(): Promise<SetupConfig | null> {
+  await ensureSetupFromEnv();
   const file = await readSetupConfig();
   if (!file) return null;
   try {
