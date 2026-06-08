@@ -67,7 +67,7 @@ function parseDbMode(value: unknown): DbMode {
   return value === 'auth_only' ? 'auth_only' : 'product';
 }
 
-function connectionBody(body: Record<string, unknown>): ConnectionInput & { dbMode: DbMode } {
+function connectionBody(body: Record<string, unknown>): ConnectionInput & { dbMode: DbMode; companyId?: string } {
   return {
     databaseUrl: body.databaseUrl !== undefined ? String(body.databaseUrl) : undefined,
     host: body.host !== undefined ? String(body.host) : undefined,
@@ -77,6 +77,7 @@ function connectionBody(body: Record<string, unknown>): ConnectionInput & { dbMo
     database: body.database !== undefined ? String(body.database) : undefined,
     ssl: Boolean(body.ssl),
     dbMode: parseDbMode(body.dbMode),
+    companyId: body.companyId !== undefined ? String(body.companyId).trim() : undefined,
   };
 }
 
@@ -211,8 +212,8 @@ setupRouter.post('/connection/test', async (req, res) => {
 
 setupRouter.post('/connection/save', async (req, res) => {
   try {
-    const { dbMode, ...conn } = connectionBody(req.body || {});
-    const prepared = await testAndPrepareConnection(conn, dbMode, { migrate: true });
+    const { dbMode, companyId, ...conn } = connectionBody(req.body || {});
+    const prepared = await testAndPrepareConnection(conn, dbMode, { migrate: true, companyId });
 
     await writeSetupConfig({
       databaseUrl: prepared.databaseUrl,

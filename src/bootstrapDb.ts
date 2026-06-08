@@ -148,23 +148,63 @@ export async function runBootstrapMigration(databaseUrl: string): Promise<void> 
   }
 }
 
-export async function ensureDefaultCompany(databaseUrl: string): Promise<string> {
+const SEED_COMPANY_ID = '00000000-0000-4000-8000-000000000001';
+
+function preferredCompanyIds(explicitCompanyId?: string): string[] {
+  const ids = [
+    explicitCompanyId?.trim(),
+    process.env.DEFAULT_COMPANY_ID?.trim(),
+    process.env.PRODUCT_COMPANY_ID?.trim(),
+    SEED_COMPANY_ID,
+  ].filter(Boolean) as string[];
+  return [...new Set(ids)];
+}
+
+/** Pick the Attenus seed org when present; avoid arbitrary LIMIT 1 on multi-tenant DBs. */
+export async function resolveProductCompanyId(
+  databaseUrl: string,
+  explicitCompanyId?: string
+): Promise<string> {
   const pool = new Pool({ connectionString: databaseUrl });
   try {
     await ensureOrganisationsTable(pool);
-    const existing = await pool.query<{ id: string }>(`SELECT id FROM organisations LIMIT 1`);
+
+    for (const id of preferredCompanyIds(explicitCompanyId)) {
+      const match = await pool.query<{ id: string }>(
+        `SELECT id::text AS id FROM organisations WHERE id = $1::uuid LIMIT 1`,
+        [id]
+      );
+      if (match.rows[0]?.id) {
+        return String(match.rows[0].id);
+      }
+    }
+
+    const named = await pool.query<{ id: string }>(
+      `SELECT id::text AS id FROM organisations WHERE name = 'Attenus Default' LIMIT 1`
+    );
+    if (named.rows[0]?.id) {
+      return String(named.rows[0].id);
+    }
+
+    const existing = await pool.query<{ id: string }>(`SELECT id::text AS id FROM organisations LIMIT 1`);
     if (existing.rows[0]?.id) {
       return String(existing.rows[0].id);
     }
-    const companyId = crypto.randomUUID();
+
+    const companyId = explicitCompanyId?.trim() || SEED_COMPANY_ID;
     await pool.query(
       `INSERT INTO organisations (id, name, created_at, updated_at) VALUES ($1, $2, NOW(), NOW())`,
-      [companyId, 'Default']
+      [companyId, 'Attenus Default']
     );
     return companyId;
   } finally {
     await pool.end();
   }
+}
+
+/** @deprecated Use resolveProductCompanyId */
+export async function ensureDefaultCompany(databaseUrl: string): Promise<string> {
+  return resolveProductCompanyId(databaseUrl);
 }
 
 export async function getAuthSetting<T>(databaseUrl: string, key: string): Promise<T | null> {
@@ -219,7 +259,7 @@ export async function countAdmins(databaseUrl: string): Promise<number> {
 export async function testAndPrepareConnection(
   input: ConnectionInput,
   dbMode: DbMode,
-  options?: { migrate?: boolean }
+  options?: { migrate?: boolean; companyId?: string }
 ): Promise<{
   databaseUrl: string;
   companyId: string;
@@ -238,7 +278,7 @@ export async function testAndPrepareConnection(
   }
 
   // organisations + auth_provider_* are created here (not in 001-auth-bootstrap.sql)
-  const companyId = await ensureDefaultCompany(databaseUrl);
+  const companyId = await resolveProductCompanyId(databaseUrl, options?.companyId);
   await ensureAdminAuthSchema(databaseUrl);
   await ensureAuthSetupTables(databaseUrl, companyId);
 

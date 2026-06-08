@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { getAuthSetting, setAuthSetting } from './bootstrapDb';
+import { getAuthSetting, resolveProductCompanyId, setAuthSetting } from './bootstrapDb';
 import { config } from './config';
 
 export type BootstrapPhase = 'connection' | 'register' | 'setup' | 'complete';
@@ -85,9 +85,10 @@ export async function ensureSetupFromEnv(): Promise<SetupConfig | null> {
       setupCompletedAt?: string;
     }>(databaseUrl, 'bootstrap');
     if (stored?.companyId) {
+      const companyId = await resolveProductCompanyId(databaseUrl);
       const restored: SetupConfig = {
         databaseUrl,
-        companyId: stored.companyId,
+        companyId,
         dbMode: stored.dbMode === 'auth_only' ? 'auth_only' : 'product',
         bootstrapPhase: stored.phase || 'complete',
         setupCompletedAt: stored.setupCompletedAt,
@@ -109,13 +110,28 @@ export async function ensureSetupFromEnv(): Promise<SetupConfig | null> {
   return bootstrapped;
 }
 
+async function reconcileCompanyId(config: SetupConfig): Promise<SetupConfig> {
+  try {
+    const resolved = await resolveProductCompanyId(config.databaseUrl);
+    if (resolved === config.companyId) {
+      return config;
+    }
+    const updated = { ...config, companyId: resolved };
+    await writeSetupConfig(updated);
+    return updated;
+  } catch {
+    return config;
+  }
+}
+
 export async function loadSetupConfigHydrated(): Promise<SetupConfig | null> {
   await ensureSetupFromEnv();
   const file = await readSetupConfig();
   if (!file) return null;
+  const reconciled = await reconcileCompanyId(file);
   try {
-    return await syncPhaseFromDb(file);
+    return await syncPhaseFromDb(reconciled);
   } catch {
-    return file;
+    return reconciled;
   }
 }
