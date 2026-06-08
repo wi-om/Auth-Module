@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { Pool } from 'pg';
 import { parse as parseConnectionString } from 'pg-connection-string';
-import { ensureOrganisationsTable } from './organisationIdType';
+import { ensureOrganisationsTable, type OrganisationIdPgType } from './organisationIdType';
 import { ensureAdminAuthSchema } from './adminAuthSchema';
 import { ensureAuthSetupTables } from './productDbConfig';
 
@@ -160,6 +160,24 @@ function preferredCompanyIds(explicitCompanyId?: string): string[] {
   return [...new Set(ids)];
 }
 
+async function findOrganisationById(
+  pool: Pool,
+  idType: OrganisationIdPgType,
+  id: string
+): Promise<string | null> {
+  const match =
+    idType === 'UUID'
+      ? await pool.query<{ id: string }>(
+          `SELECT id::text AS id FROM organisations WHERE id = $1::uuid LIMIT 1`,
+          [id]
+        )
+      : await pool.query<{ id: string }>(
+          `SELECT id::text AS id FROM organisations WHERE id::text = $1 LIMIT 1`,
+          [id]
+        );
+  return match.rows[0]?.id ? String(match.rows[0].id) : null;
+}
+
 /** Pick the Attenus seed org when present; avoid arbitrary LIMIT 1 on multi-tenant DBs. */
 export async function resolveProductCompanyId(
   databaseUrl: string,
@@ -167,15 +185,12 @@ export async function resolveProductCompanyId(
 ): Promise<string> {
   const pool = new Pool({ connectionString: databaseUrl });
   try {
-    await ensureOrganisationsTable(pool);
+    const idType = await ensureOrganisationsTable(pool);
 
     for (const id of preferredCompanyIds(explicitCompanyId)) {
-      const match = await pool.query<{ id: string }>(
-        `SELECT id::text AS id FROM organisations WHERE id = $1::uuid LIMIT 1`,
-        [id]
-      );
-      if (match.rows[0]?.id) {
-        return String(match.rows[0].id);
+      const found = await findOrganisationById(pool, idType, id);
+      if (found) {
+        return found;
       }
     }
 
@@ -192,10 +207,17 @@ export async function resolveProductCompanyId(
     }
 
     const companyId = explicitCompanyId?.trim() || SEED_COMPANY_ID;
-    await pool.query(
-      `INSERT INTO organisations (id, name, created_at, updated_at) VALUES ($1, $2, NOW(), NOW())`,
-      [companyId, 'Attenus Default']
-    );
+    if (idType === 'UUID') {
+      await pool.query(
+        `INSERT INTO organisations (id, name, created_at, updated_at) VALUES ($1::uuid, $2, NOW(), NOW())`,
+        [companyId, 'Attenus Default']
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO organisations (id, name, created_at, updated_at) VALUES ($1, $2, NOW(), NOW())`,
+        [companyId, 'Attenus Default']
+      );
+    }
     return companyId;
   } finally {
     await pool.end();
