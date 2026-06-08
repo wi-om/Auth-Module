@@ -4,6 +4,7 @@ import { corsMiddleware } from './cors';
 import { router } from './routes';
 import { productAuthRouter } from './productAuthRoutes';
 import { setupRouter } from './setupRoutes';
+import { pepperFingerprint } from './loginDebug';
 import { mountSetupUi, setupUiDistExists } from './setupUiStatic';
 import { reloadRuntimeFromSetup } from './runtimeSync';
 import { removeSetupResumeIfAdminReady } from './setupResumeAuth';
@@ -32,6 +33,10 @@ async function bootstrap(): Promise<void> {
   app.listen(config.port, () => {
     // eslint-disable-next-line no-console
     console.log(`Auth prototype running on http://localhost:${config.port}`);
+    // eslint-disable-next-line no-console
+    console.log(
+      `[auth] peppers user=${pepperFingerprint(config.userPepper)} admin=${pepperFingerprint(config.adminPepper)} jwt=${config.jwtSecretForProduct ? 'set' : 'missing'}`
+    );
     if (setupUiDistExists()) {
       // eslint-disable-next-line no-console
       console.log(`Setup UI: http://localhost:${config.port}/setup`);

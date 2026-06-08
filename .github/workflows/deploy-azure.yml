@@ -18,6 +18,10 @@ env:
   AUTH_URL: https://auth-dev-service-aae4e9h7b6bhb3aq.uaenorth-01.azurewebsites.net
   FRONTEND_URL: https://attendance-dev-app-fe-a7dwemevg5e3cyae.uaenorth-01.azurewebsites.net
   BACKEND_URL: https://attendance-dev-app-be-a7cbadaxh0chb5c4.uaenorth-01.azurewebsites.net
+  # Dev defaults — must match backend seed (.env). Override via GitHub secrets if set.
+  JWT_SECRET: attenus-dev-jwt-secret-change-in-production
+  AUTH_USER_PEPPER: dev-user-pepper-match-auth-service
+  AUTH_ADMIN_PEPPER: admin_pepper
 
 jobs:
   build-auth:
@@ -105,9 +109,10 @@ jobs:
                 ALLOWED_ORIGINS="${{ env.FRONTEND_URL }},${{ env.BACKEND_URL }}" \
                 DEFAULT_COMPANY_ID=00000000-0000-4000-8000-000000000001 \
                 SETUP_DEMO_PASSWORD=password123 \
-                JWT_SECRET="${{ secrets.JWT_SECRET }}" \
-                AUTH_USER_PEPPER="${{ secrets.AUTH_USER_PEPPER }}" \
-                AUTH_ADMIN_PEPPER="${{ secrets.AUTH_ADMIN_PEPPER }}"
+                AUTH_LOGIN_DEBUG=true \
+                JWT_SECRET="${{ env.JWT_SECRET }}" \
+                AUTH_USER_PEPPER="${{ env.AUTH_USER_PEPPER }}" \
+                AUTH_ADMIN_PEPPER="${{ env.AUTH_ADMIN_PEPPER }}"
             az webapp config set \
               --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
               --name "${{ env.AUTH_APP }}" \

@@ -3,7 +3,11 @@ import { Pool } from 'pg';
 import { config } from './config';
 import { resolveProductCompanyId } from './bootstrapDb';
 import { loadSetupConfigHydrated, type SetupConfig } from './setupStore';
-import { compareClientHashedPassword, hashClientHashedPassword } from './productPassword';
+import { logLoginDebug, pepperFingerprint } from './loginDebug';
+import {
+  compareClientHashedPassword,
+  hashClientHashedPassword,
+} from './productPassword';
 
 export type ProductUserRow = {
   id: string;
@@ -80,13 +84,32 @@ export async function loginProductUser(
   clientHashedPassword: string
 ): Promise<ProductUserRow> {
   const setup = await requireSetup();
+  const resolvedCompanyId = await resolveProductCompanyId(setup.databaseUrl);
   const user = await findProductUserByEmail(setup, email);
+
   if (!user) {
+    logLoginDebug('failed_user_not_found', {
+      email: email.trim().toLowerCase(),
+      setupCompanyId: setup.companyId,
+      resolvedCompanyId,
+      pepper: pepperFingerprint(config.userPepper),
+    });
     throw new Error('Invalid credentials');
   }
   if (!user.is_active) {
+    logLoginDebug('failed_account_deactivated', {
+      email: user.email,
+      userId: user.id,
+      companyId: user.company_id,
+    });
     throw new Error('Account is deactivated');
   }
+
+  const computedHash = hashClientHashedPassword(
+    clientHashedPassword,
+    user.id,
+    config.userPepper
+  );
   const valid = compareClientHashedPassword(
     clientHashedPassword,
     user.id,
@@ -94,8 +117,26 @@ export async function loginProductUser(
     config.userPepper
   );
   if (!valid) {
+    logLoginDebug('failed_password_mismatch', {
+      email: user.email,
+      userId: user.id,
+      userCompanyId: user.company_id,
+      setupCompanyId: setup.companyId,
+      resolvedCompanyId,
+      pepper: pepperFingerprint(config.userPepper),
+      storedHashPrefix: user.password.slice(0, 12),
+      computedHashPrefix: computedHash.slice(0, 12),
+      hashMatch: computedHash === user.password,
+    });
     throw new Error('Invalid credentials');
   }
+
+  logLoginDebug('success', {
+    email: user.email,
+    userId: user.id,
+    companyId: user.company_id,
+    resolvedCompanyId,
+  });
   return user;
 }
 

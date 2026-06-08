@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 import { config } from './config';
 import { resolveProductCompanyId } from './bootstrapDb';
+import { logLoginDebug, pepperFingerprint } from './loginDebug';
 import { hashPlainPasswordForUser } from './productPassword';
 import { readSetupConfig, writeSetupConfig, type SetupConfig } from './setupStore';
 
@@ -76,6 +77,16 @@ export async function syncDeploymentDemoUsers(
       dbMode,
       bootstrapPhase: existing?.bootstrapPhase ?? 'register',
       setupCompletedAt: existing?.setupCompletedAt,
+    });
+
+    logLoginDebug('deployment_user_sync', {
+      companyId,
+      synced,
+      skipped,
+      pepper: pepperFingerprint(pepper),
+      hashExamplePrefix: synced.length
+        ? hashPlainPasswordForUser(plainPassword, '00000000-0000-4000-8000-000000000001', pepper).slice(0, 12)
+        : null,
     });
 
     return { companyId, synced, skipped, demoPassword: plainPassword };
