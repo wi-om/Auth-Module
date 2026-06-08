@@ -49,6 +49,10 @@ jobs:
           mkdir -p "$PKG/setup-ui"
           cp -r setup-ui/dist "$PKG/setup-ui/dist"
           test -f "$PKG/setup-ui/dist/index.html"
+          # Setup save runs SQL from scripts/migrations (e.g. 002-admin-auth-columns.sql)
+          mkdir -p "$PKG/scripts"
+          cp -r scripts/migrations "$PKG/scripts/migrations"
+          test -f "$PKG/scripts/migrations/002-admin-auth-columns.sql"
           cd "$PKG"
           zip -r "${{ runner.temp }}/auth-deploy.zip" .
 
@@ -73,6 +77,8 @@ jobs:
         run: |
           unzip auth-deploy.zip -d auth-package
           ls -la auth-package
+          ls -la auth-package/setup-ui/dist
+          ls -la auth-package/scripts/migrations
 
       - name: Login to Azure
         uses: azure/login@v2
