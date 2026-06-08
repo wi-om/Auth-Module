@@ -16,7 +16,7 @@ env:
   AZURE_RESOURCE_GROUP: MIPS-Dev-ResGroup
   AUTH_APP: auth-dev-service
   AUTH_URL: https://auth-dev-service-aae4e9h7b6bhb3aq.uaenorth-01.azurewebsites.net
-  FRONTEND_URL: https://attendance-dev-app-fe.azurewebsites.net
+  FRONTEND_URL: https://attendance-dev-app-fe-a7dwemevg5e3cyae.uaenorth-01.azurewebsites.net
   BACKEND_URL: https://attendance-dev-app-be-a7cbadaxh0chb5c4.uaenorth-01.azurewebsites.net
 
 jobs:
