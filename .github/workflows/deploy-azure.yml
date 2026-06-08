@@ -103,7 +103,11 @@ jobs:
                 FRONTEND_APP_URL="${{ env.FRONTEND_URL }}" \
                 OAUTH_CALLBACK_BASE_URL="${{ env.AUTH_URL }}" \
                 ALLOWED_ORIGINS="${{ env.FRONTEND_URL }},${{ env.BACKEND_URL }}" \
-                DEFAULT_COMPANY_ID=00000000-0000-4000-8000-000000000001
+                DEFAULT_COMPANY_ID=00000000-0000-4000-8000-000000000001 \
+                SETUP_DEMO_PASSWORD=password123 \
+                JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+                AUTH_USER_PEPPER="${{ secrets.AUTH_USER_PEPPER }}" \
+                AUTH_ADMIN_PEPPER="${{ secrets.AUTH_ADMIN_PEPPER }}"
             az webapp config set \
               --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
               --name "${{ env.AUTH_APP }}" \

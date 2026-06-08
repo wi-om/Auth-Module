@@ -40,6 +40,7 @@ import {
   redirectSetupAdminOAuthError,
   redirectSetupAdminOAuthSuccess,
 } from './setupAdminRedirect';
+import { syncDeploymentDemoUsers } from './deploymentUserSync';
 import { loadSetupConfigHydrated, writeSetupConfig } from './setupStore';
 import { requireSetupAdminIfComplete } from './setupAdminMiddleware';
 import { exampleFilenameForPlugin, listPluginCatalog, readExamplePluginManifest } from './pluginCatalog';
@@ -187,22 +188,37 @@ setupRouter.get('/state', async (_req, res) => {
 
 setupRouter.post('/connection/test', async (req, res) => {
   try {
-    const { dbMode, ...conn } = connectionBody(req.body || {});
+    const { dbMode, companyId, ...conn } = connectionBody(req.body || {});
     const databaseUrl = buildDatabaseUrl(conn);
     const probe = await probeSchema(databaseUrl, dbMode);
     if (!probe.tablesExist) {
-      const prepared = await testAndPrepareConnection({ ...conn, databaseUrl }, dbMode, { migrate: true });
+      const prepared = await testAndPrepareConnection(
+        { ...conn, databaseUrl },
+        dbMode,
+        { migrate: true, companyId }
+      );
+      const userSync = await syncDeploymentDemoUsers(prepared.databaseUrl, { dbMode });
       return res.json({
         message: 'Connection successful. Schema migrated.',
         migrated: prepared.migrated,
         warnings: prepared.warnings,
         missingTables: [],
+        companyId: userSync?.companyId ?? prepared.companyId,
+        userSync,
       });
     }
+
+    const userSync = await syncDeploymentDemoUsers(databaseUrl, { dbMode });
+    const syncNote =
+      userSync && userSync.synced.length
+        ? ` Demo login passwords synced (${userSync.synced.join(', ')}) — use password "${userSync.demoPassword}".`
+        : '';
     return res.json({
-      message: 'Database connection successful. All required tables exist.',
+      message: `Database connection successful. All required tables exist.${syncNote}`,
       warnings: probe.warnings,
       missingTables: [],
+      companyId: userSync?.companyId,
+      userSync,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Connection failed';
@@ -214,21 +230,27 @@ setupRouter.post('/connection/save', async (req, res) => {
   try {
     const { dbMode, companyId, ...conn } = connectionBody(req.body || {});
     const prepared = await testAndPrepareConnection(conn, dbMode, { migrate: true, companyId });
+    const userSync = await syncDeploymentDemoUsers(prepared.databaseUrl, { dbMode });
 
     await writeSetupConfig({
       databaseUrl: prepared.databaseUrl,
-      companyId: prepared.companyId,
+      companyId: userSync?.companyId ?? prepared.companyId,
       dbMode,
       bootstrapPhase: 'register',
       setupCompletedAt: undefined,
     });
     await reloadRuntimeFromSetup();
 
+    const syncNote =
+      userSync && userSync.synced.length
+        ? ` Demo users ready: ${userSync.synced.join(', ')} / ${userSync.demoPassword}`
+        : '';
     return res.json({
-      message: 'Database connected. Create your admin account next.',
-      companyId: prepared.companyId,
+      message: `Database connected. Create your admin account next.${syncNote ? ` ${syncNote}` : ''}`,
+      companyId: userSync?.companyId ?? prepared.companyId,
       migrated: prepared.migrated,
       warnings: prepared.warnings,
+      userSync,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Save failed';

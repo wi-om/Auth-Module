@@ -11,6 +11,15 @@ export function hashClientHashedPassword(
     .digest('hex');
 }
 
+export function hashPlainPasswordForUser(
+  plainPassword: string,
+  userId: string,
+  pepper: string
+): string {
+  const clientHash = crypto.createHash('sha256').update(plainPassword).digest('hex');
+  return hashClientHashedPassword(clientHash, userId, pepper);
+}
+
 export function compareClientHashedPassword(
   clientHashedPassword: string,
   salt: string,

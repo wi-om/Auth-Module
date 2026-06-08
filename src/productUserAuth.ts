@@ -36,21 +36,40 @@ function poolFor(setup: SetupConfig): Pool {
   return new Pool({ connectionString: setup.databaseUrl });
 }
 
+const USER_SELECT = `SELECT id::text AS id, company_id::text AS company_id, email, name, phone, role, is_active, password
+  FROM users`;
+
 export async function findProductUserByEmail(
   setup: SetupConfig,
   email: string
 ): Promise<ProductUserRow | null> {
   const pool = poolFor(setup);
   const companyId = await resolveProductCompanyId(setup.databaseUrl);
+  const normalizedEmail = email.trim();
   try {
-    const result = await pool.query<ProductUserRow>(
-      `SELECT id, company_id::text AS company_id, email, name, phone, role, is_active, password
-       FROM users
-       WHERE LOWER(email) = LOWER($1) AND company_id::text = $2
-       LIMIT 1`,
-      [email.trim(), companyId]
+    const scoped = await pool.query<ProductUserRow>(
+      `${USER_SELECT} WHERE LOWER(email) = LOWER($1) AND company_id::text = $2 LIMIT 1`,
+      [normalizedEmail, companyId]
     );
-    return result.rows[0] || null;
+    if (scoped.rows[0]) {
+      return scoped.rows[0];
+    }
+
+    // Stale setup.json can point at a wrong companyId — still allow valid product users.
+    const byEmail = await pool.query<ProductUserRow>(
+      `${USER_SELECT} WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+      [normalizedEmail]
+    );
+    const candidate = byEmail.rows[0];
+    if (!candidate) {
+      return null;
+    }
+
+    const org = await pool.query(
+      `SELECT 1 FROM organisations WHERE id::text = $1 LIMIT 1`,
+      [candidate.company_id]
+    );
+    return org.rowCount ? candidate : null;
   } finally {
     await pool.end();
   }
