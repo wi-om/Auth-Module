@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { Pool } from 'pg';
 import { parse as parseConnectionString } from 'pg-connection-string';
+import { DEMO_USER_EMAILS } from './databaseInfo';
 import { ensureOrganisationsTable, type OrganisationIdPgType } from './organisationIdType';
 import { ensureAdminAuthSchema } from './adminAuthSchema';
 import { ensureAuthSetupTables } from './productDbConfig';
@@ -160,6 +161,38 @@ function preferredCompanyIds(explicitCompanyId?: string): string[] {
   return [...new Set(ids)];
 }
 
+async function resolveCompanyIdFromUsers(pool: Pool, preferredIds: string[]): Promise<string | null> {
+  const usersTable = await pool.query(
+    `SELECT 1 FROM information_schema.tables
+     WHERE table_schema = 'public' AND table_name = 'users' LIMIT 1`
+  );
+  if (!usersTable.rowCount) {
+    return null;
+  }
+
+  const demo = await pool.query<{ company_id: string }>(
+    `SELECT company_id::text AS company_id FROM users
+     WHERE LOWER(email) = ANY($1::text[]) LIMIT 1`,
+    [DEMO_USER_EMAILS.map((e) => e.toLowerCase())]
+  );
+  if (demo.rows[0]?.company_id) {
+    return String(demo.rows[0].company_id);
+  }
+
+  if (preferredIds.length) {
+    const matched = await pool.query<{ company_id: string }>(
+      `SELECT company_id::text AS company_id FROM users
+       WHERE company_id::text = ANY($1::text[]) LIMIT 1`,
+      [preferredIds]
+    );
+    if (matched.rows[0]?.company_id) {
+      return String(matched.rows[0].company_id);
+    }
+  }
+
+  return null;
+}
+
 async function findOrganisationById(
   pool: Pool,
   idType: OrganisationIdPgType,
@@ -186,12 +219,18 @@ export async function resolveProductCompanyId(
   const pool = new Pool({ connectionString: databaseUrl });
   try {
     const idType = await ensureOrganisationsTable(pool);
+    const preferredIds = preferredCompanyIds(explicitCompanyId);
 
-    for (const id of preferredCompanyIds(explicitCompanyId)) {
+    for (const id of preferredIds) {
       const found = await findOrganisationById(pool, idType, id);
       if (found) {
         return found;
       }
+    }
+
+    const fromUsers = await resolveCompanyIdFromUsers(pool, preferredIds);
+    if (fromUsers) {
+      return fromUsers;
     }
 
     const named = await pool.query<{ id: string }>(

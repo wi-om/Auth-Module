@@ -110,6 +110,7 @@ jobs:
                 DEFAULT_COMPANY_ID=00000000-0000-4000-8000-000000000001 \
                 SETUP_DEMO_PASSWORD=password123 \
                 AUTH_LOGIN_DEBUG=true \
+                EXPECTED_PRODUCT_DATABASE=erp \
                 JWT_SECRET="${{ env.JWT_SECRET }}" \
                 AUTH_USER_PEPPER="${{ env.AUTH_USER_PEPPER }}" \
                 AUTH_ADMIN_PEPPER="${{ env.AUTH_ADMIN_PEPPER }}"

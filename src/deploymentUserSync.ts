@@ -1,23 +1,28 @@
 import { Pool } from 'pg';
 import { config } from './config';
 import { resolveProductCompanyId } from './bootstrapDb';
+import {
+  DEMO_USER_EMAILS,
+  deploymentDatabaseWarning,
+  describeDatabaseUrl,
+  probeProductUsers,
+} from './databaseInfo';
 import { logLoginDebug, pepperFingerprint } from './loginDebug';
 import { hashPlainPasswordForUser } from './productPassword';
 import { readSetupConfig, writeSetupConfig, type SetupConfig } from './setupStore';
 
-/** Demo accounts from backend seed — re-hashed on setup connect so Azure pepper always matches. */
-export const DEPLOYMENT_DEMO_EMAILS = [
-  'admin@attenus.local',
-  'ahmed@attenus.local',
-  'sara@attenus.local',
-  'omar@attenus.local',
-] as const;
+/** @deprecated Use DEMO_USER_EMAILS from databaseInfo */
+export const DEPLOYMENT_DEMO_EMAILS = DEMO_USER_EMAILS;
 
 export type DeploymentUserSyncResult = {
   companyId: string;
   synced: string[];
   skipped: string[];
   demoPassword: string;
+  database: string;
+  userCount: number;
+  demoFound: string[];
+  warning: string | null;
 };
 
 function demoPlainPassword(): string {
@@ -35,21 +40,38 @@ export async function syncDeploymentDemoUsers(
 
   const plainPassword = options?.plainPassword?.trim() || demoPlainPassword();
   const pepper = config.userPepper;
-  const companyId = await resolveProductCompanyId(databaseUrl);
+  const database = describeDatabaseUrl(databaseUrl);
+  const probe = await probeProductUsers(databaseUrl);
+  let companyId = await resolveProductCompanyId(databaseUrl);
   const pool = new Pool({ connectionString: databaseUrl });
   const synced: string[] = [];
   const skipped: string[] = [];
 
   try {
-    const usersTable = await pool.query(
-      `SELECT 1 FROM information_schema.tables
-       WHERE table_schema = 'public' AND table_name = 'users' LIMIT 1`
-    );
-    if (!usersTable.rowCount) {
-      return { companyId, synced, skipped: [...DEPLOYMENT_DEMO_EMAILS], demoPassword: plainPassword };
+    if (!probe.usersTable) {
+      const warning = deploymentDatabaseWarning(databaseUrl, probe);
+      logLoginDebug('deployment_user_sync', {
+        database: database.label,
+        companyId,
+        synced,
+        skipped: [...DEMO_USER_EMAILS],
+        userCount: 0,
+        warning,
+        pepper: pepperFingerprint(pepper),
+      });
+      return {
+        companyId,
+        synced,
+        skipped: [...DEMO_USER_EMAILS],
+        demoPassword: plainPassword,
+        database: database.label,
+        userCount: 0,
+        demoFound: [],
+        warning,
+      };
     }
 
-    for (const email of DEPLOYMENT_DEMO_EMAILS) {
+    for (const email of DEMO_USER_EMAILS) {
       const row = await pool.query<{ id: string; company_id: string }>(
         `SELECT id::text AS id, company_id::text AS company_id
          FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
@@ -67,6 +89,9 @@ export async function syncDeploymentDemoUsers(
         [storedHash, user.id]
       );
       synced.push(email);
+      if (user.company_id) {
+        companyId = user.company_id;
+      }
     }
 
     const existing = await readSetupConfig();
@@ -79,17 +104,35 @@ export async function syncDeploymentDemoUsers(
       setupCompletedAt: existing?.setupCompletedAt,
     });
 
+    const warning = deploymentDatabaseWarning(databaseUrl, {
+      ...probe,
+      demoFound: probe.demoFound.length ? probe.demoFound : synced,
+    });
+
     logLoginDebug('deployment_user_sync', {
+      database: database.label,
       companyId,
       synced,
       skipped,
+      userCount: probe.userCount,
+      demoFound: probe.demoFound,
+      warning,
       pepper: pepperFingerprint(pepper),
       hashExamplePrefix: synced.length
         ? hashPlainPasswordForUser(plainPassword, '00000000-0000-4000-8000-000000000001', pepper).slice(0, 12)
         : null,
     });
 
-    return { companyId, synced, skipped, demoPassword: plainPassword };
+    return {
+      companyId,
+      synced,
+      skipped,
+      demoPassword: plainPassword,
+      database: database.label,
+      userCount: probe.userCount,
+      demoFound: probe.demoFound,
+      warning,
+    };
   } finally {
     await pool.end();
   }

@@ -198,10 +198,14 @@ setupRouter.post('/connection/test', async (req, res) => {
         { migrate: true, companyId }
       );
       const userSync = await syncDeploymentDemoUsers(prepared.databaseUrl, { dbMode });
+      const warnings = [...prepared.warnings];
+      if (userSync?.warning) {
+        warnings.push(userSync.warning);
+      }
       return res.json({
         message: 'Connection successful. Schema migrated.',
         migrated: prepared.migrated,
-        warnings: prepared.warnings,
+        warnings,
         missingTables: [],
         companyId: userSync?.companyId ?? prepared.companyId,
         userSync,
@@ -213,9 +217,13 @@ setupRouter.post('/connection/test', async (req, res) => {
       userSync && userSync.synced.length
         ? ` Demo login passwords synced (${userSync.synced.join(', ')}) — use password "${userSync.demoPassword}".`
         : '';
+    const warnings = [...probe.warnings];
+    if (userSync?.warning) {
+      warnings.push(userSync.warning);
+    }
     return res.json({
       message: `Database connection successful. All required tables exist.${syncNote}`,
-      warnings: probe.warnings,
+      warnings,
       missingTables: [],
       companyId: userSync?.companyId,
       userSync,

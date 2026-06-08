@@ -3,6 +3,7 @@ import { Pool } from 'pg';
 import { config } from './config';
 import { resolveProductCompanyId } from './bootstrapDb';
 import { loadSetupConfigHydrated, type SetupConfig } from './setupStore';
+import { describeDatabaseUrl } from './databaseInfo';
 import { logLoginDebug, pepperFingerprint } from './loginDebug';
 import {
   compareClientHashedPassword,
@@ -90,9 +91,11 @@ export async function loginProductUser(
   if (!user) {
     logLoginDebug('failed_user_not_found', {
       email: email.trim().toLowerCase(),
+      database: describeDatabaseUrl(setup.databaseUrl).label,
       setupCompanyId: setup.companyId,
       resolvedCompanyId,
       pepper: pepperFingerprint(config.userPepper),
+      hint: 'Use backend DATABASE_URL (database erp) and run npm run seed if demo users are missing',
     });
     throw new Error('Invalid credentials');
   }
