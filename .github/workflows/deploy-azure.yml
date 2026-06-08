@@ -14,10 +14,10 @@ concurrency:
 
 env:
   AZURE_RESOURCE_GROUP: MIPS-Dev-ResGroup
-  AUTH_APP: attenus-dev-auth
-  AUTH_URL: https://attenus-dev-auth.azurewebsites.net
-  FRONTEND_URL: https://attenus-dev-fe.azurewebsites.net
-  BACKEND_URL: https://attenus-dev-be.azurewebsites.net
+  AUTH_APP: auth-dev-service
+  AUTH_URL: https://auth-dev-service-aae4e9h7b6bhb3aq.uaenorth-01.azurewebsites.net
+  FRONTEND_URL: https://attendance-dev-app-fe.azurewebsites.net
+  BACKEND_URL: https://attendance-dev-app-be-a7cbadaxh0chb5c4.uaenorth-01.azurewebsites.net
 
 jobs:
   build-auth:
