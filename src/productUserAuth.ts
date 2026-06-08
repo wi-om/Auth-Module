@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { Pool } from 'pg';
 import { config } from './config';
+import { resolveProductCompanyId } from './bootstrapDb';
 import { loadSetupConfigHydrated, type SetupConfig } from './setupStore';
 import { compareClientHashedPassword, hashClientHashedPassword } from './productPassword';
 
@@ -40,13 +41,14 @@ export async function findProductUserByEmail(
   email: string
 ): Promise<ProductUserRow | null> {
   const pool = poolFor(setup);
+  const companyId = await resolveProductCompanyId(setup.databaseUrl);
   try {
     const result = await pool.query<ProductUserRow>(
-      `SELECT id, company_id, email, name, phone, role, is_active, password
+      `SELECT id, company_id::text AS company_id, email, name, phone, role, is_active, password
        FROM users
-       WHERE LOWER(email) = LOWER($1) AND company_id = $2
+       WHERE LOWER(email) = LOWER($1) AND company_id::text = $2
        LIMIT 1`,
-      [email.trim(), setup.companyId]
+      [email.trim(), companyId]
     );
     return result.rows[0] || null;
   } finally {

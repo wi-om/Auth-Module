@@ -9,6 +9,7 @@ import {
   loginProductUser,
   requireSetup,
 } from './productUserAuth';
+import { resolveProductCompanyId } from './bootstrapDb';
 import { loadSetupConfigHydrated } from './setupStore';
 
 export const productAuthRouter = Router();
@@ -22,11 +23,14 @@ function isClientHash(value: unknown): value is string {
 productAuthRouter.get('/config', async (_req, res, next) => {
   try {
     const setup = await loadSetupConfigHydrated();
-    const productAuthReady = Boolean(setup?.databaseUrl && setup?.companyId && config.userPepper && config.jwtSecretForProduct);
+    const companyId = setup?.databaseUrl
+      ? await resolveProductCompanyId(setup.databaseUrl)
+      : setup?.companyId || null;
+    const productAuthReady = Boolean(setup?.databaseUrl && companyId && config.userPepper && config.jwtSecretForProduct);
     res.json({
       authServiceUrl: config.publicBaseUrl || `http://localhost:${config.port}`,
       productAuthReady,
-      companyId: setup?.companyId || null,
+      companyId,
       allowedOrigins: config.allowedOrigins,
       endpoints: {
         providers: '/auth/providers',

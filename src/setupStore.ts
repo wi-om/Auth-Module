@@ -66,7 +66,9 @@ export async function syncPhaseFromDb(config: SetupConfig): Promise<SetupConfig>
 /** Hydrate setup.json from Azure env or DB when the runtime file was wiped on redeploy. */
 export async function ensureSetupFromEnv(): Promise<SetupConfig | null> {
   const existing = await readSetupConfig();
-  if (existing) return existing;
+  if (existing) {
+    return reconcileCompanyId(existing);
+  }
 
   const databaseUrl = process.env.DATABASE_URL?.trim();
   if (!databaseUrl) return null;
