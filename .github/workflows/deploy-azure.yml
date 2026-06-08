@@ -1,0 +1,108 @@
+# Use this workflow if auth-microservice-prototype is in its own Git repository.
+name: Deploy Auth Service to Azure
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+
+concurrency:
+  group: azure-auth-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AZURE_RESOURCE_GROUP: MIPS-Dev-ResGroup
+  AUTH_APP: attenus-dev-auth
+  AUTH_URL: https://attenus-dev-auth.azurewebsites.net
+  FRONTEND_URL: https://attenus-dev-fe.azurewebsites.net
+  BACKEND_URL: https://attenus-dev-be.azurewebsites.net
+
+jobs:
+  build-auth:
+    name: Build auth microservice
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+      - name: Install, build, production deps
+        run: |
+          npm install --no-audit --no-fund
+          npm install --no-audit --no-fund --prefix setup-ui
+          npm run build
+          npm prune --omit=dev
+
+      - name: Prepare auth package
+        run: |
+          PKG="${{ runner.temp }}/auth-package"
+          rm -rf "$PKG"
+          mkdir -p "$PKG"
+          cp -r dist package.json node_modules "$PKG/"
+          cp -r setup-ui/dist "$PKG/setup-ui/"
+          cd "$PKG"
+          zip -r "${{ runner.temp }}/auth-deploy.zip" .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: auth-package
+          path: ${{ runner.temp }}/auth-deploy.zip
+
+  deploy-auth:
+    name: Auth → Azure
+    runs-on: ubuntu-latest
+    needs: build-auth
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: auth-package
+
+      - name: Unzip auth package
+        run: |
+          unzip auth-deploy.zip -d auth-package
+          ls -la auth-package
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Configure auth app
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az webapp config appsettings set \
+              --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+              --name "${{ env.AUTH_APP }}" \
+              --settings \
+                SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+                WEBSITE_RUN_FROM_PACKAGE=0 \
+                WEBSITE_NODE_DEFAULT_VERSION=~20 \
+                NODE_ENV=production \
+                PORT=8080 \
+                FRONTEND_APP_URL="${{ env.FRONTEND_URL }}" \
+                OAUTH_CALLBACK_BASE_URL="${{ env.AUTH_URL }}" \
+                ALLOWED_ORIGINS="${{ env.FRONTEND_URL }},${{ env.BACKEND_URL }}"
+            az webapp config set \
+              --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+              --name "${{ env.AUTH_APP }}" \
+              --startup-file "node dist/index.js"
+
+      - name: Deploy auth
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AUTH_APP }}
+          slot-name: Production
+          package: auth-package
+          clean: true
